@@ -25,7 +25,6 @@ android {
 
         buildConfigField("String", "FLORA_SERVER_URL", secret("flora.serverUrl", "ws://192.168.1.50:8765/ws"))
         buildConfigField("String", "FLORA_TOKEN", secret("flora.token"))
-        buildConfigField("String", "PICOVOICE_ACCESS_KEY", secret("picovoice.accessKey"))
     }
 
     buildFeatures { buildConfig = true }
@@ -41,5 +40,5 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.activity:activity-ktx:1.9.3")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("ai.picovoice:porcupine-android:3.0.2")
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.19.2")
 }

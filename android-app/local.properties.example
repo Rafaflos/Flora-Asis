@@ -1,4 +1,3 @@
 # Copia a local.properties (Android Studio añade sdk.dir por su cuenta)
 flora.serverUrl=ws://192.168.1.50:8765/ws
 flora.token=EL_MISMO_FLORA_TOKEN_DEL_BACKEND
-picovoice.accessKey=TU_ACCESS_KEY_DE_console.picovoice.ai

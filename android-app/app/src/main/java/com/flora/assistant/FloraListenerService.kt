@@ -18,7 +18,6 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import ai.picovoice.porcupine.Porcupine
 import java.util.Locale
 import kotlin.concurrent.thread
 import kotlin.math.sqrt
@@ -82,31 +81,32 @@ class FloraListenerService : Service(), WebSocketManager.Listener, TextToSpeech.
 
     @SuppressLint("MissingPermission") // RECORD_AUDIO se pide en MainActivity antes de iniciar
     private fun captureLoop() {
-        // "Jarvis" es una palabra clave incluida. Para "Flora", entrena un .ppn en
-        // console.picovoice.ai y usa setKeywordPath("flora_android.ppn") (carpeta assets).
-        val porcupine = try {
-            Porcupine.Builder()
-                .setAccessKey(BuildConfig.PICOVOICE_ACCESS_KEY)
-                .setKeyword(Porcupine.BuiltInKeyword.JARVIS)
-                .build(applicationContext)
+        // Mismo modelo «Oye Flora» que el nodo de escritorio, sobre ONNX Runtime (sin cuentas ni claves).
+        val detector = try {
+            WakeWordDetector(
+                melModel = assets.open("melspectrogram.onnx").use { it.readBytes() },
+                embeddingModel = assets.open("embedding_model.onnx").use { it.readBytes() },
+                wakeModel = assets.open("oye_flora.onnx").use { it.readBytes() },
+            )
         } catch (e: Exception) {
-            Log.e(TAG, "No se pudo iniciar Porcupine: ${e.message}")
+            Log.e(TAG, "No se pudo cargar el detector de palabra clave: ${e.message}")
             return
         }
-        val frameLength = porcupine.frameLength // 512 muestras a 16 kHz
+        val frameLength = WakeWordDetector.FRAME_SAMPLES // 1280 muestras = 80 ms
         val minBuffer = AudioRecord.getMinBufferSize(
             SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT
         )
         val recorder = AudioRecord(
             MediaRecorder.AudioSource.VOICE_RECOGNITION, SAMPLE_RATE,
             AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT,
-            maxOf(minBuffer, frameLength * 8),
+            maxOf(minBuffer, frameLength * 2 * 4),
         )
         val frame = ShortArray(frameLength)
         val bytes = ByteArray(frameLength * 2)
         val frameMs = frameLength * 1000 / SAMPLE_RATE
 
         var recording = false
+        var wasSpeaking = false
         var heardSpeech = false
         var silenceMs = 0
         var elapsedMs = 0
@@ -114,11 +114,25 @@ class FloraListenerService : Service(), WebSocketManager.Listener, TextToSpeech.
         try {
             recorder.startRecording()
             while (running) {
-                if (recorder.read(frame, 0, frameLength) != frameLength) continue
-                if (speaking) continue // no escucharse a sí misma
+                var read = 0
+                while (read < frameLength && running) {
+                    val n = recorder.read(frame, read, frameLength - read)
+                    if (n <= 0) break
+                    read += n
+                }
+                if (read != frameLength) continue
+                if (speaking) { // no escucharse a sí misma
+                    wasSpeaking = true
+                    continue
+                }
+                if (wasSpeaking) {
+                    detector.reset()
+                    wasSpeaking = false
+                }
 
                 if (!recording) {
-                    if (porcupine.process(frame) >= 0 && ws.isReady) {
+                    if (detector.process(frame) && ws.isReady) {
+                        detector.reset()
                         recording = true
                         heardSpeech = false
                         silenceMs = 0
@@ -152,7 +166,7 @@ class FloraListenerService : Service(), WebSocketManager.Listener, TextToSpeech.
             }
         } finally {
             recorder.release()
-            porcupine.delete()
+            detector.close()
         }
     }
 
@@ -165,10 +179,10 @@ class FloraListenerService : Service(), WebSocketManager.Listener, TextToSpeech.
     // ── WebSocketManager.Listener (hilo principal) ──
 
     override fun onConnectionChanged(connected: Boolean) =
-        updateStatus(if (connected) "Lista. Di «Jarvis»." else "Sin conexión con la Mac")
+        updateStatus(if (connected) "Lista. Di «Oye Flora»." else "Sin conexión con la Mac")
 
     override fun onReply(text: String) {
-        updateStatus("Lista. Di «Jarvis».")
+        updateStatus("Lista. Di «Oye Flora».")
         speak(text)
     }
 

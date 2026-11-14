@@ -68,14 +68,14 @@ source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env      # mismo FLORA_TOKEN
 python listener.py --text # prueba por teclado, sin micrófono
-python listener.py        # voz: di "hey Jarvis"
+python listener.py        # voz: di «Oye Flora»
 ```
 
 macOS pedirá permiso de micrófono para la terminal la primera vez.
 
 Android: abre `android-app/` en Android Studio, copia `local.properties.example` a
-`local.properties`, pon la IP de la Mac (`ipconfig getifaddr en0`), el token y tu
-AccessKey gratuita de console.picovoice.ai, y ejecuta en el teléfono.
+`local.properties`, pon la IP de la Mac (`ipconfig getifaddr en0`) y el token, y ejecuta en el teléfono.
+`setup-mac.sh` ya escribe ambos valores.
 
 ## Centinela
 
@@ -99,5 +99,8 @@ No se ha probado con voces humanas reales. Si se activa sola, sube `FLORA_WAKE_T
 si no te oye, bájalo. Para volver a «hey Jarvis»: `FLORA_WAKEWORD=hey_jarvis`.
 Los scripts con los que se entrenó están en `tools/wakeword-training/`.
 
-En Android la app sigue usando Porcupine («Jarvis»); para «Oye Flora» ahí hay que entrenar
-un `.ppn` en la consola de Picovoice (ver comentario en `FloraListenerService.kt`).
+La app Android usa el mismo modelo con ONNX Runtime (`WakeWordDetector.kt`, modelos en
+`android-app/app/src/main/assets/`), sin cuentas ni claves de terceros.
+
+Los modelos `melspectrogram.onnx` y `embedding_model.onnx` son de openWakeWord y se
+distribuyen con licencia CC BY-NC-SA 4.0: uso personal, no comercial.

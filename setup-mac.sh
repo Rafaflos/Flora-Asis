@@ -65,7 +65,6 @@ IP=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null ||
 PROPS=android-app/local.properties
 set_kv "$PROPS" flora.serverUrl "ws://$IP:8765/ws"
 set_kv "$PROPS" flora.token "$TOKEN"
-[[ -n "$(get_kv "$PROPS" picovoice.accessKey)" ]] || set_kv "$PROPS" picovoice.accessKey ""
 chmod 600 backend-mac/.env desktop-node/.env "$PROPS"
 
 cat <<MSG
@@ -76,5 +75,5 @@ Listo. Siguientes pasos:
      Token del panel (FLORA_TOKEN): $TOKEN
   3. Nodo por teclado: cd desktop-node && .venv/bin/python listener.py --text
   4. Nodo por voz:     cd desktop-node && .venv/bin/python listener.py
-  5. Android: añade picovoice.accessKey en android-app/local.properties (servidor: ws://$IP:8765/ws)
+  5. Android: abre android-app/ en Android Studio y ejecútala en el teléfono (servidor: ws://$IP:8765/ws)
 MSG
