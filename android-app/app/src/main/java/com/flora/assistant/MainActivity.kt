@@ -46,7 +46,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        FloraStatus.onChange = { render() }
         startIfReady()
+    }
+
+    override fun onPause() {
+        FloraStatus.onChange = null
+        super.onPause()
     }
 
     private fun requiredPermissions(): Array<String> = buildList {
@@ -64,8 +70,15 @@ class MainActivity : ComponentActivity() {
             return
         }
         FloraListenerService.start(this)
-        val overlay = if (Settings.canDrawOverlays(this)) "" else
-            "\n\nFalta el permiso para abrir apps y alarmas con la pantalla apagada."
-        status.text = "Flora está escuchando.\nServidor: ${BuildConfig.FLORA_SERVER_URL}$overlay"
+        render()
+    }
+
+    private fun render() {
+        val lines = mutableListOf("Estado: ${FloraStatus.text}", "Servidor: ${BuildConfig.FLORA_SERVER_URL}")
+        if (FloraStatus.lastReply.isNotEmpty()) lines += "\nFlora: ${FloraStatus.lastReply}"
+        if (!Settings.canDrawOverlays(this)) {
+            lines += "\nFalta el permiso para abrir apps y alarmas con la pantalla apagada."
+        }
+        status.text = lines.joinToString("\n")
     }
 }

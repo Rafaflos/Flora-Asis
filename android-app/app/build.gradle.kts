@@ -23,6 +23,9 @@ android {
         versionCode = 1
         versionName = "0.1.0"
 
+        // Teléfonos actuales (arm64) y emulador (x86_64); reduce el APK a menos de la mitad.
+        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
+
         buildConfigField("String", "FLORA_SERVER_URL", secret("flora.serverUrl", "ws://192.168.1.50:8765/ws"))
         buildConfigField("String", "FLORA_TOKEN", secret("flora.token"))
     }

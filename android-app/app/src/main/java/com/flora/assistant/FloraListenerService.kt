@@ -10,8 +10,10 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.media.AudioFormat
+import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.media.ToneGenerator
 import android.os.Build
 import android.os.IBinder
 import android.speech.tts.TextToSpeech
@@ -39,6 +41,10 @@ class FloraListenerService : Service(), WebSocketManager.Listener, TextToSpeech.
 
     @Volatile private var running = false
     @Volatile private var speaking = false
+    @Volatile private var listenNow = false          // abrir el micro sin palabra clave (respuesta a «¿Confirmas?»)
+    @Volatile private var ownPendingAction: String? = null
+    private val deviceId by lazy { "android-" + Build.MODEL.lowercase().replace(' ', '-') }
+    private var tone: ToneGenerator? = null
     private var ttsReady = false
     private var captureThread: Thread? = null
 
@@ -52,8 +58,9 @@ class FloraListenerService : Service(), WebSocketManager.Listener, TextToSpeech.
 
         executor = ActionExecutor(this)
         tts = TextToSpeech(this, this)
-        ws = WebSocketManager(BuildConfig.FLORA_SERVER_URL, BuildConfig.FLORA_TOKEN, deviceId(), this)
+        ws = WebSocketManager(BuildConfig.FLORA_SERVER_URL, BuildConfig.FLORA_TOKEN, deviceId, this)
         ws.connect()
+        tone = runCatching { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 60) }.getOrNull()
 
         running = true
         captureThread = thread(name = "flora-capture") { captureLoop() }
@@ -74,6 +81,8 @@ class FloraListenerService : Service(), WebSocketManager.Listener, TextToSpeech.
         captureThread?.join(1000)
         ws.disconnect()
         tts.shutdown()
+        tone?.release()
+        FloraStatus.update("Detenida")
         super.onDestroy()
     }
 
@@ -131,8 +140,12 @@ class FloraListenerService : Service(), WebSocketManager.Listener, TextToSpeech.
                 }
 
                 if (!recording) {
-                    if (detector.process(frame) && ws.isReady) {
+                    // Palabra clave, o micro abierto directamente para responder a una confirmación.
+                    val triggered = listenNow || detector.process(frame)
+                    if (triggered && ws.isReady) {
+                        listenNow = false
                         detector.reset()
+                        tone?.startTone(ToneGenerator.TONE_PROP_BEEP, 120) // aviso de «te escucho»
                         recording = true
                         heardSpeech = false
                         silenceMs = 0
@@ -182,11 +195,14 @@ class FloraListenerService : Service(), WebSocketManager.Listener, TextToSpeech.
         updateStatus(if (connected) "Lista. Di «Oye Flora»." else "Sin conexión con la Mac")
 
     override fun onReply(text: String) {
+        FloraStatus.update(lastReply = text)
         updateStatus("Lista. Di «Oye Flora».")
         speak(text)
     }
 
     override fun onConfirmationRequest(request: ConfirmationRequest) {
+        // Si la pedí yo por voz, tras la pregunta de Flora se abre el micro para oír «sí» o «no».
+        if (request.origin == deviceId) ownPendingAction = request.actionId
         val id = request.actionId.hashCode()
         val card = NotificationCompat.Builder(this, CHANNEL_CONFIRM)
             .setSmallIcon(android.R.drawable.ic_dialog_alert)
@@ -203,8 +219,10 @@ class FloraListenerService : Service(), WebSocketManager.Listener, TextToSpeech.
         notifications.notify(id, card)
     }
 
-    override fun onConfirmationResolved(actionId: String, approved: Boolean, detail: String) =
+    override fun onConfirmationResolved(actionId: String, approved: Boolean, detail: String) {
+        if (ownPendingAction == actionId) ownPendingAction = null
         notifications.cancel(actionId.hashCode())
+    }
 
     override fun onExecuteAction(action: DeviceAction) {
         val result = executor.execute(action)
@@ -231,7 +249,10 @@ class FloraListenerService : Service(), WebSocketManager.Listener, TextToSpeech.
         tts.language = Locale("es", "MX")
         tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) { speaking = true }
-            override fun onDone(utteranceId: String?) { speaking = false }
+            override fun onDone(utteranceId: String?) {
+                if (ownPendingAction != null) listenNow = true
+                speaking = false
+            }
             @Deprecated("Deprecated in Java")
             override fun onError(utteranceId: String?) { speaking = false }
         })
@@ -261,17 +282,18 @@ class FloraListenerService : Service(), WebSocketManager.Listener, TextToSpeech.
             .setOngoing(true)
             .build()
 
-    private fun updateStatus(text: String) = notifications.notify(STATUS_ID, statusNotification(text))
+    private fun updateStatus(text: String) {
+        notifications.notify(STATUS_ID, statusNotification(text))
+        FloraStatus.update(text)
+    }
 
     private fun startForegroundCompat(notification: Notification) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             startForeground(STATUS_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
         } else {
             startForeground(STATUS_ID, notification)
         }
     }
-
-    private fun deviceId(): String = "android-" + Build.MODEL.lowercase().replace(' ', '-')
 
     companion object {
         private const val TAG = "FloraService"

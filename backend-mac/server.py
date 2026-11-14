@@ -30,6 +30,7 @@ import hmac
 import json
 import logging
 import os
+import re
 import sqlite3
 import time
 import urllib.parse
@@ -831,6 +832,19 @@ async def api_confirm(body: ConfirmBody) -> dict:
     return {"ok": ok, "detail": detail}
 
 
+_YES = re.compile(r"\b(s[ií]|confirm[oa]|adelante|hazlo|dale|claro|okey|ok|procede|correcto)\b", re.I)
+_NO = re.compile(r"\b(no|cancel[ao]|cancelar|det[eé]n|olv[ií]dalo|espera|mejor no)\b", re.I)
+
+
+def parse_yes_no(text: str) -> bool | None:
+    """True = sí, False = no, None = no quedó claro. Ante la duda gana el no."""
+    if _NO.search(text):
+        return False
+    if _YES.search(text):
+        return True
+    return None
+
+
 async def _handle_utterance(dev: Device, text: str) -> None:
     text = text.strip()
     if not text:
@@ -850,6 +864,14 @@ async def _handle_audio(dev: Device, pcm: bytes) -> None:
         await hub.send(dev.device_id, {"type": "error", "detail": "Instala faster-whisper en el backend para recibir audio."})
         return
     await hub.send(dev.device_id, {"type": "transcript", "text": text})
+    # Confirmación por voz desde el teléfono: si este dispositivo tiene una acción suya en
+    # espera y dijo claramente sí o no, lo resuelve el Centinela; el modelo no interviene.
+    own_pending = [p for p in memory.list_pending() if p["origin"] == dev.device_id]
+    answer = parse_yes_no(text) if own_pending else None
+    if answer is not None:
+        emit("user", text, dev.device_id)
+        await _handle_confirmation(dev, own_pending[-1]["id"], answer)
+        return
     await _handle_utterance(dev, text)
 
 

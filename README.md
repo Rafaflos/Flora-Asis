@@ -73,7 +73,8 @@ python listener.py        # voz: di «Oye Flora»
 
 macOS pedirá permiso de micrófono para la terminal la primera vez.
 
-Android: abre `android-app/` en Android Studio, copia `local.properties.example` a
+Android: la app compila con `./gradlew assembleDebug` (comprobado con SDK 35; el analizador
+de Android no da errores). No se ha ejecutado en un teléfono real. Abre `android-app/` en Android Studio, copia `local.properties.example` a
 `local.properties`, pon la IP de la Mac (`ipconfig getifaddr en0`) y el token, y ejecuta en el teléfono.
 `setup-mac.sh` ya escribe ambos valores.
 

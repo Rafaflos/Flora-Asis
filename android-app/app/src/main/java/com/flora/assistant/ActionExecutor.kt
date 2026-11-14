@@ -62,7 +62,9 @@ class ActionExecutor(private val context: Context) {
     // ── Llamadas ──
 
     private fun placeCall(number: String): Result {
-        if (!has(Manifest.permission.CALL_PHONE)) return Result(false, "Falta el permiso CALL_PHONE")
+        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) ==
+            PackageManager.PERMISSION_GRANTED
+        if (!granted) return Result(false, "Falta el permiso CALL_PHONE")
         val uri = Uri.fromParts("tel", number, null)
         // placeCall no es un startActivity: funciona con la app en segundo plano.
         val telecom = context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
