@@ -1,0 +1,16 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    { "label": "Flora: 1 · Configurar (instala y pide la clave)", "type": "shell", "command": "./setup-mac.sh",
+      "presentation": { "focus": true, "panel": "dedicated" }, "problemMatcher": [] },
+    { "label": "Flora: 2 · Cerebro Central", "type": "shell", "command": ".venv/bin/python server.py",
+      "options": { "cwd": "${workspaceFolder}/backend-mac" }, "isBackground": true,
+      "presentation": { "panel": "dedicated" }, "problemMatcher": [] },
+    { "label": "Flora: 3 · Nodo por teclado", "type": "shell", "command": ".venv/bin/python listener.py --text",
+      "options": { "cwd": "${workspaceFolder}/desktop-node" },
+      "presentation": { "focus": true, "panel": "dedicated" }, "problemMatcher": [] },
+    { "label": "Flora: 4 · Nodo por voz", "type": "shell", "command": ".venv/bin/python listener.py",
+      "options": { "cwd": "${workspaceFolder}/desktop-node" }, "isBackground": true,
+      "presentation": { "panel": "dedicated" }, "problemMatcher": [] }
+  ]
+}
