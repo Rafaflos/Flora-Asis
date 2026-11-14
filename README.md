@@ -85,8 +85,19 @@ ejecutan desde el bucle del agente: se guardan en `pending_actions` y devuelven
 (voz en la Mac, botón en la tarjeta de Android) las ejecuta, con la entrada guardada,
 una sola vez y antes de 120 s. El modelo no tiene ninguna herramienta para aprobar.
 
-## Palabra clave "Flora"
+## Palabra clave «Oye Flora»
 
-Los dos nodos usan "Jarvis" (modelos preentrenados). Para "Flora": entrena un modelo
-openWakeWord y pon su ruta en `FLORA_WAKEWORD`; en Android, entrena un `.ppn` en la
-consola de Picovoice (ver comentario en `FloraListenerService.kt`).
+El nodo de escritorio usa `desktop-node/models/oye_flora.onnx`, un modelo openWakeWord
+entrenado solo con voz sintética (unos 1,000 hablantes). Es experimental. Medido con umbral
+0.8 y dos cuadros seguidos:
+
+- Voz mexicana no vista (medido en una versión entrenada sin esa voz; el modelo final sí la incluye): detectó 88 de 100 frases.
+- Frases parecidas sin la palabra clave («oye Laura», «Flora llegó tarde»): 2 % de activaciones.
+- 5.3 horas de audio real sin la palabra: unas 0.4 a 0.6 falsas activaciones por hora.
+
+No se ha probado con voces humanas reales. Si se activa sola, sube `FLORA_WAKE_THRESHOLD`;
+si no te oye, bájalo. Para volver a «hey Jarvis»: `FLORA_WAKEWORD=hey_jarvis`.
+Los scripts con los que se entrenó están en `tools/wakeword-training/`.
+
+En Android la app sigue usando Porcupine («Jarvis»); para «Oye Flora» ahí hay que entrenar
+un `.ppn` en la consola de Picovoice (ver comentario en `FloraListenerService.kt`).

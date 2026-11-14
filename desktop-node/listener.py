@@ -12,8 +12,8 @@ Variables (.env en esta carpeta o entorno):
   FLORA_TOKEN          mismo token que el backend (obligatorio)
   FLORA_SERVER         ws://127.0.0.1:8765/ws
   FLORA_DEVICE_ID      mac-escritorio
-  FLORA_WAKEWORD       ruta a un .onnx o nombre preentrenado (por defecto models/flora.onnx)
-  FLORA_WAKE_THRESHOLD 0.5
+  FLORA_WAKEWORD       ruta a un .onnx o nombre preentrenado (por defecto models/oye_flora.onnx)
+  FLORA_WAKE_THRESHOLD 0.8 con el modelo propio, 0.5 con los preentrenados
   FLORA_WHISPER_MODEL  small
   FLORA_VOICE          es-MX-DaliaNeural
 """
@@ -46,11 +46,14 @@ _load_dotenv(Path(__file__).resolve().parent / ".env")
 SERVER = os.environ.get("FLORA_SERVER", "ws://127.0.0.1:8765/ws")
 TOKEN = os.environ.get("FLORA_TOKEN", "")
 DEVICE_ID = os.environ.get("FLORA_DEVICE_ID", "mac-escritorio")
-# Palabra clave: el modelo propio «Flora» si está en models/; si no, el preentrenado "hey_jarvis".
-_FLORA_MODEL = Path(__file__).resolve().parent / "models" / "flora.onnx"
+# Palabra clave: el modelo propio «Oye Flora» si está en models/; si no, el preentrenado "hey_jarvis".
+_FLORA_MODEL = Path(__file__).resolve().parent / "models" / "oye_flora.onnx"
 WAKEWORD = os.environ.get("FLORA_WAKEWORD") or (str(_FLORA_MODEL) if _FLORA_MODEL.exists() else "hey_jarvis")
 WAKEWORD_NAME = Path(WAKEWORD).stem.replace("_", " ")
-WAKE_THRESHOLD = float(os.environ.get("FLORA_WAKE_THRESHOLD", "0.5"))
+_CUSTOM = WAKEWORD.endswith(".onnx")
+# El modelo propio se midió con umbral 0.8 y 2 cuadros seguidos (80 ms cada uno) por encima.
+WAKE_THRESHOLD = float(os.environ.get("FLORA_WAKE_THRESHOLD", "0.8" if _CUSTOM else "0.5"))
+WAKE_FRAMES = int(os.environ.get("FLORA_WAKE_FRAMES", "2" if _CUSTOM else "1"))
 WHISPER_MODEL = os.environ.get("FLORA_WHISPER_MODEL", "small")
 VOICE = os.environ.get("FLORA_VOICE", "es-MX-DaliaNeural")
 
@@ -166,6 +169,7 @@ class VoiceNode:
         self.speak_q: asyncio.Queue[str] = asyncio.Queue()
         self.link = FloraLink(self.on_message)
         self.speaking = False
+        self.wake_streak = 0
         self.pending_confirmation: str | None = None
         self.listen_now = False  # abrir el micro sin palabra clave (respuesta a una confirmación)
 
@@ -174,6 +178,7 @@ class VoiceNode:
         while not self.audio_q.empty():
             self.audio_q.get_nowait()
         self.wake.reset()
+        self.wake_streak = 0
 
     def _has_speech(self, frame: bytes) -> bool:
         chunks = (frame[i:i + VAD_FRAME_BYTES] for i in range(0, len(frame), VAD_FRAME_BYTES))
@@ -181,7 +186,8 @@ class VoiceNode:
 
     def _wake_detected(self, frame: bytes) -> bool:
         scores = self.wake.predict(self.np.frombuffer(frame, dtype=self.np.int16))
-        return max(scores.values()) >= WAKE_THRESHOLD
+        self.wake_streak = self.wake_streak + 1 if max(scores.values()) >= WAKE_THRESHOLD else 0
+        return self.wake_streak >= WAKE_FRAMES
 
     async def _record_utterance(self) -> bytes | None:
         """Graba hasta detectar fin de voz. Devuelve None si nadie habló."""
